@@ -223,4 +223,10 @@ If you encounter any issues:
 4. Check the browser console for errors
 5. Review the server logs
 
-For additional support, please create an issue in the repository.
+For additional support, please create an issue in the repository
+Name:Naitik Goyani          
+Email:naitikgoy18@gmail.com           
+Name:Manthan Rogheliya           
+Email:Manthan.rogheliya7@gmail.com                                      
+Name:kenit maniar                                           
+Email:kenitmaniar2@gmail.com                                  
