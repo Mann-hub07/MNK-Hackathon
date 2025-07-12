@@ -1,40 +1,37 @@
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
+import { Toaster } from "./components/ui/toaster";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+// Layout Components
+import Navbar from "./components/Layout/Navbar";
+import Footer from "./components/Layout/Footer";
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+// Pages
+import Landing from "./pages/Landing";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import Browse from "./pages/Browse";
+import AddItem from "./pages/AddItem";
+import ItemDetail from "./pages/ItemDetail";
+import Admin from "./pages/Admin";
 
+// Tidio Chat Integration
+const TidioChat = () => {
   useEffect(() => {
-    helloWorldApi();
+    // Tidio Chat Widget Integration
+    const script = document.createElement('script');
+    script.src = "//code.tidio.co/your-tidio-key.js";
+    script.async = true;
+    document.body.appendChild(script);
+
+    // Cleanup
+    return () => {
+      document.body.removeChild(script);
+    };
   }, []);
 
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
+  return null;
 };
 
 function App() {
@@ -42,10 +39,88 @@ function App() {
     <div className="App">
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
+          {/* Public Routes */}
+          <Route path="/" element={
+            <>
+              <Navbar />
+              <Landing />
+              <Footer />
+              <TidioChat />
+            </>
+          } />
+          
+          <Route path="/login" element={<Login />} />
+          
+          {/* Protected Routes with Layout */}
+          <Route path="/dashboard" element={
+            <>
+              <Navbar />
+              <Dashboard />
+              <Footer />
+              <TidioChat />
+            </>
+          } />
+          
+          <Route path="/browse" element={
+            <>
+              <Navbar />
+              <Browse />
+              <Footer />
+              <TidioChat />
+            </>
+          } />
+          
+          <Route path="/add-item" element={
+            <>
+              <Navbar />
+              <AddItem />
+              <Footer />
+              <TidioChat />
+            </>
+          } />
+          
+          <Route path="/item/:id" element={
+            <>
+              <Navbar />
+              <ItemDetail />
+              <Footer />
+              <TidioChat />
+            </>
+          } />
+          
+          {/* Admin Route */}
+          <Route path="/admin" element={
+            <>
+              <Navbar />
+              <Admin />
+              <Footer />
+              <TidioChat />
+            </>
+          } />
+          
+          {/* Catch-all 404 Route */}
+          <Route path="*" element={
+            <>
+              <Navbar />
+              <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-9xl font-bold text-gray-300 mb-4">404</div>
+                  <h1 className="text-4xl font-bold text-gray-900 mb-4">Page Not Found</h1>
+                  <p className="text-xl text-gray-600 mb-8">
+                    The page you're looking for doesn't exist.
+                  </p>
+                  <a href="/" className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold">
+                    Go Home
+                  </a>
+                </div>
+              </div>
+              <Footer />
+            </>
+          } />
         </Routes>
+        
+        {/* Global Toast Notifications */}
+        <Toaster />
       </BrowserRouter>
     </div>
   );
