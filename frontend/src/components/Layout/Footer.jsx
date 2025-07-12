@@ -11,7 +11,7 @@ const Footer = () => {
       { name: 'Community', href: '/community' },
     ],
     support: [
-      { name: 'Help Center', href: '/help' },
+      { name: 'Help Desk', href: '/help' },
       { name: 'Safety Guidelines', href: '/safety' },
       { name: 'Contact Us', href: '/contact' },
       { name: 'Report Issue', href: '/report' },

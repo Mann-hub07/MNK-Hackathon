@@ -109,6 +109,20 @@ const Landing = () => {
             >
               Swap or redeem unused clothing. Save fashion. Save the planet.
             </motion.p>
+            
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.5 }}
+              className="text-center"
+            >
+              <Link 
+                to="/about" 
+                className="text-green-600 hover:text-green-700 font-medium underline underline-offset-4 transition-colors duration-200"
+              >
+                Learn more about our mission →
+              </Link>
+            </motion.div>
 
             <motion.div 
               className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-8"
@@ -582,6 +596,26 @@ const Landing = () => {
               >
                 <Link to="/browse">
                   Explore Items
+                </Link>
+              </Button>
+              <Button 
+                size="lg" 
+                variant="ghost" 
+                asChild
+                className="text-white hover:bg-white/10 px-8 py-6 text-lg font-semibold rounded-full"
+              >
+                <Link to="/contact">
+                  Contact Us
+                </Link>
+              </Button>
+              <Button 
+                size="lg" 
+                variant="ghost" 
+                asChild
+                className="text-white hover:bg-white/10 px-8 py-6 text-lg font-semibold rounded-full"
+              >
+                <Link to="/help">
+                  Help Desk
                 </Link>
               </Button>
             </div>

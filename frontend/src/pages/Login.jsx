@@ -13,7 +13,8 @@ import {
   Mail, 
   Lock, 
   ArrowRight,
-  Chrome
+  Chrome,
+  AlertCircle
 } from 'lucide-react';
 
 const Login = () => {
@@ -26,9 +27,57 @@ const Login = () => {
     name: '',
     rememberMe: false
   });
+  const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Validation functions
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePassword = (password) => {
+    // At least 8 characters, 1 uppercase, 1 lowercase, 1 number
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/;
+    return passwordRegex.test(password);
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    // Email validation
+    if (!formData.email) {
+      newErrors.email = 'Email is required';
+    } else if (!validateEmail(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+
+    // Password validation
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (!isLogin && !validatePassword(formData.password)) {
+      newErrors.password = 'Password must be at least 8 characters with uppercase, lowercase, and number';
+    }
+
+    // Confirm password validation (only for signup)
+    if (!isLogin) {
+      if (!formData.confirmPassword) {
+        newErrors.confirmPassword = 'Please confirm your password';
+      } else if (formData.password !== formData.confirmPassword) {
+        newErrors.confirmPassword = 'Passwords do not match';
+      }
+    }
+
+    // Name validation (only for signup)
+    if (!isLogin && !formData.name.trim()) {
+      newErrors.name = 'Full name is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -36,34 +85,106 @@ const Login = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+    
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      toast({
+        title: "Validation Error",
+        description: "Please fix the errors in the form.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsLoading(true);
 
-    // Mock authentication
-    setTimeout(() => {
-      setIsLoading(false);
-      toast({
-        title: isLogin ? "Welcome back!" : "Account created!",
-        description: isLogin ? "You've successfully logged in." : "Your ReWear account has been created.",
+    try {
+      // Mock authentication - replace with real API call
+      const response = await new Promise((resolve, reject) => {
+        setTimeout(() => {
+          // Simulate API call
+          if (formData.email && formData.password) {
+            resolve({
+              success: true,
+              user: {
+                id: 'user_1',
+                name: formData.name || 'User',
+                email: formData.email
+              }
+            });
+          } else {
+            reject(new Error('Invalid credentials'));
+          }
+        }, 2000);
       });
-      navigate('/dashboard');
-    }, 2000);
+
+      if (response.success) {
+        // Store user data in localStorage or context
+        localStorage.setItem('user', JSON.stringify(response.user));
+        if (formData.rememberMe) {
+          localStorage.setItem('rememberMe', 'true');
+        }
+
+        toast({
+          title: isLogin ? "Welcome back!" : "Account created!",
+          description: isLogin ? "You've successfully logged in." : "Your ReWear account has been created.",
+        });
+        navigate('/dashboard');
+      }
+    } catch (error) {
+      toast({
+        title: "Authentication Failed",
+        description: error.message || "Please check your credentials and try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleGoogleAuth = () => {
-    // Mock Google authentication
+  const handleGoogleAuth = async () => {
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    
+    try {
+      // Mock Google authentication - replace with real OAuth
+      await new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            success: true,
+            user: {
+              id: 'google_user_1',
+              name: 'Google User',
+              email: 'user@gmail.com'
+            }
+          });
+        }, 1500);
+      });
+
       toast({
         title: "Google Sign-in Successful!",
         description: "Welcome to ReWear community.",
       });
       navigate('/dashboard');
-    }, 1500);
+    } catch (error) {
+      toast({
+        title: "Google Sign-in Failed",
+        description: "Please try again or use email sign-in.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const containerVariants = {
@@ -166,9 +287,18 @@ const Login = () => {
                   value={formData.name}
                   onChange={handleInputChange}
                   required={!isLogin}
-                  className="mt-2 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-green-500 focus:ring-green-500 py-6 rounded-lg"
+                  className={`mt-2 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-green-500 focus:ring-green-500 py-6 rounded-lg ${
+                    errors.name ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                  }`}
                   placeholder="Enter your full name"
+                  aria-describedby={errors.name ? "name-error" : undefined}
                 />
+                {errors.name && (
+                  <div id="name-error" className="flex items-center mt-1 text-red-400 text-sm">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {errors.name}
+                  </div>
+                )}
               </motion.div>
             )}
 
@@ -185,9 +315,18 @@ const Login = () => {
                   value={formData.email}
                   onChange={handleInputChange}
                   required
-                  className="pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-green-500 focus:ring-green-500 py-6 rounded-lg"
+                  className={`pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-green-500 focus:ring-green-500 py-6 rounded-lg ${
+                    errors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                  }`}
                   placeholder="Enter your email"
+                  aria-describedby={errors.email ? "email-error" : undefined}
                 />
+                {errors.email && (
+                  <div id="email-error" className="flex items-center mt-1 text-red-400 text-sm">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {errors.email}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -204,16 +343,26 @@ const Login = () => {
                   value={formData.password}
                   onChange={handleInputChange}
                   required
-                  className="pl-10 pr-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-green-500 focus:ring-green-500 py-6 rounded-lg"
+                  className={`pl-10 pr-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-green-500 focus:ring-green-500 py-6 rounded-lg ${
+                    errors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                  }`}
                   placeholder="Enter your password"
+                  aria-describedby={errors.password ? "password-error" : undefined}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-300"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
+                {errors.password && (
+                  <div id="password-error" className="flex items-center mt-1 text-red-400 text-sm">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {errors.password}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -236,9 +385,18 @@ const Login = () => {
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
                     required={!isLogin}
-                    className="pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-green-500 focus:ring-green-500 py-6 rounded-lg"
+                    className={`pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-green-500 focus:ring-green-500 py-6 rounded-lg ${
+                      errors.confirmPassword ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                    }`}
                     placeholder="Confirm your password"
+                    aria-describedby={errors.confirmPassword ? "confirm-password-error" : undefined}
                   />
+                  {errors.confirmPassword && (
+                    <div id="confirm-password-error" className="flex items-center mt-1 text-red-400 text-sm">
+                      <AlertCircle className="w-4 h-4 mr-1" />
+                      {errors.confirmPassword}
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -295,7 +453,17 @@ const Login = () => {
             <p className="text-gray-400">
               {isLogin ? "New to ReWear?" : "Already have an account?"}
               <button
-                onClick={() => setIsLogin(!isLogin)}
+                onClick={() => {
+                  setIsLogin(!isLogin);
+                  setErrors({});
+                  setFormData({
+                    email: '',
+                    password: '',
+                    confirmPassword: '',
+                    name: '',
+                    rememberMe: false
+                  });
+                }}
                 className="text-green-400 hover:text-green-300 ml-2 font-medium transition-colors duration-200"
               >
                 {isLogin ? 'Sign up now' : 'Sign in here'}

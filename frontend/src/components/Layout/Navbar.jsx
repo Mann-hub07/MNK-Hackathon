@@ -28,6 +28,9 @@ const Navbar = () => {
 
   const navigation = [
     { name: 'Browse', href: '/browse' },
+    { name: 'About Us', href: '/about' },
+    { name: 'Help Desk', href: '/help' },
+    { name: 'Contact', href: '/contact' },
     { name: 'Add Item', href: '/add-item' },
     { name: 'My Swaps', href: '/dashboard' },
   ];

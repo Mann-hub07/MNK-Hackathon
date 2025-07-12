@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -44,6 +44,7 @@ const AddItem = () => {
     estimatedValue: 0,
     wearCoins: 0
   });
+  const [errors, setErrors] = useState({});
   const [newTag, setNewTag] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState(null);
@@ -51,17 +52,139 @@ const AddItem = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleInputChange = (field, value) => {
+  // Validation functions
+  const validateTitle = useCallback((title) => {
+    if (!title.trim()) return 'Title is required';
+    if (title.length < 3) return 'Title must be at least 3 characters';
+    if (title.length > 100) return 'Title must be less than 100 characters';
+    return null;
+  }, []);
+
+  const validateDescription = useCallback((description) => {
+    if (!description.trim()) return 'Description is required';
+    if (description.length < 10) return 'Description must be at least 10 characters';
+    if (description.length > 500) return 'Description must be less than 500 characters';
+    return null;
+  }, []);
+
+  const validateCategory = useCallback((category) => {
+    if (!category) return 'Category is required';
+    if (!categories.includes(category)) return 'Please select a valid category';
+    return null;
+  }, []);
+
+  const validateSize = useCallback((size) => {
+    if (!size) return 'Size is required';
+    if (!sizes.includes(size)) return 'Please select a valid size';
+    return null;
+  }, []);
+
+  const validateCondition = useCallback((condition) => {
+    if (!condition) return 'Condition is required';
+    if (!conditions.includes(condition)) return 'Please select a valid condition';
+    return null;
+  }, []);
+
+  const validateImages = useCallback((images) => {
+    if (images.length === 0) return 'At least one image is required';
+    if (images.length > 5) return 'Maximum 5 images allowed';
+    return null;
+  }, []);
+
+  const validateForm = useCallback((stepNumber) => {
+    const newErrors = {};
+
+    if (stepNumber === 1) {
+      const imageError = validateImages(formData.images);
+      if (imageError) newErrors.images = imageError;
+    }
+
+    if (stepNumber === 2) {
+      const titleError = validateTitle(formData.title);
+      if (titleError) newErrors.title = titleError;
+
+      const descriptionError = validateDescription(formData.description);
+      if (descriptionError) newErrors.description = descriptionError;
+
+      const categoryError = validateCategory(formData.category);
+      if (categoryError) newErrors.category = categoryError;
+
+      const sizeError = validateSize(formData.size);
+      if (sizeError) newErrors.size = sizeError;
+
+      const conditionError = validateCondition(formData.condition);
+      if (conditionError) newErrors.condition = conditionError;
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [formData, validateTitle, validateDescription, validateCategory, validateSize, validateCondition, validateImages]);
+
+  // Input sanitization
+  const sanitizeInput = useCallback((input) => {
+    return input
+      .trim()
+      .replace(/[<>]/g, '') // Remove potential HTML tags
+      .replace(/javascript:/gi, '') // Remove javascript: protocol
+      .replace(/on\w+=/gi, ''); // Remove event handlers
+  }, []);
+
+  const handleInputChange = useCallback((field, value) => {
+    const sanitizedValue = typeof value === 'string' ? sanitizeInput(value) : value;
+    
     setFormData(prev => ({
       ...prev,
-      [field]: value
+      [field]: sanitizedValue
     }));
-  };
 
-  const handleImageUpload = (e) => {
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors(prev => ({
+        ...prev,
+        [field]: ''
+      }));
+    }
+  }, [errors, sanitizeInput]);
+
+  const handleImageUpload = useCallback((e) => {
     const files = Array.from(e.target.files);
     
-    files.forEach(file => {
+    // Validate file types and sizes
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    
+    const validFiles = files.filter(file => {
+      if (!validTypes.includes(file.type)) {
+        toast({
+          title: "Invalid file type",
+          description: `${file.name} is not a supported image format. Please use JPEG, PNG, or WebP.`,
+          variant: "destructive"
+        });
+        return false;
+      }
+      
+      if (file.size > maxSize) {
+        toast({
+          title: "File too large",
+          description: `${file.name} is too large. Maximum size is 5MB.`,
+          variant: "destructive"
+        });
+        return false;
+      }
+      
+      return true;
+    });
+
+    if (formData.images.length + validFiles.length > 5) {
+      toast({
+        title: "Too many images",
+        description: "Maximum 5 images allowed. Please remove some images first.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    validFiles.forEach(file => {
       const reader = new FileReader();
       reader.onload = (e) => {
         setFormData(prev => ({
@@ -69,11 +192,18 @@ const AddItem = () => {
           images: [...prev.images, e.target.result]
         }));
       };
+      reader.onerror = () => {
+        toast({
+          title: "Upload failed",
+          description: `Failed to read ${file.name}. Please try again.`,
+          variant: "destructive"
+        });
+      };
       reader.readAsDataURL(file);
     });
 
     // Mock AI Analysis
-    if (files.length > 0) {
+    if (validFiles.length > 0) {
       setIsProcessing(true);
       setTimeout(() => {
         setAiAnalysis({
@@ -89,33 +219,78 @@ const AddItem = () => {
         setIsProcessing(false);
       }, 2000);
     }
-  };
+  }, [formData.images.length, toast]);
 
-  const removeImage = (index) => {
+  const removeImage = useCallback((index) => {
     setFormData(prev => ({
       ...prev,
       images: prev.images.filter((_, i) => i !== index)
     }));
-  };
+  }, []);
 
-  const addTag = () => {
-    if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
-      setFormData(prev => ({
-        ...prev,
-        tags: [...prev.tags, newTag.trim()]
-      }));
-      setNewTag('');
+  const addTag = useCallback(() => {
+    const sanitizedTag = sanitizeInput(newTag).toLowerCase();
+    
+    if (!sanitizedTag) {
+      toast({
+        title: "Empty tag",
+        description: "Please enter a tag name.",
+        variant: "destructive"
+      });
+      return;
     }
-  };
+    
+    if (sanitizedTag.length < 2) {
+      toast({
+        title: "Tag too short",
+        description: "Tag must be at least 2 characters long.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (sanitizedTag.length > 20) {
+      toast({
+        title: "Tag too long",
+        description: "Tag must be less than 20 characters.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (formData.tags.includes(sanitizedTag)) {
+      toast({
+        title: "Duplicate tag",
+        description: "This tag already exists.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (formData.tags.length >= 10) {
+      toast({
+        title: "Too many tags",
+        description: "Maximum 10 tags allowed.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      tags: [...prev.tags, sanitizedTag]
+    }));
+    setNewTag('');
+  }, [newTag, formData.tags, sanitizeInput, toast]);
 
-  const removeTag = (tagToRemove) => {
+  const removeTag = useCallback((tagToRemove) => {
     setFormData(prev => ({
       ...prev,
       tags: prev.tags.filter(tag => tag !== tagToRemove)
     }));
-  };
+  }, []);
 
-  const applyAiSuggestions = () => {
+  const applyAiSuggestions = useCallback(() => {
     if (aiAnalysis) {
       setFormData(prev => ({
         ...prev,
@@ -133,21 +308,66 @@ const AddItem = () => {
         description: "Your item details have been auto-filled.",
       });
     }
-  };
+  }, [aiAnalysis, toast]);
 
-  const handleSubmit = async () => {
+  const handleNextStep = useCallback(() => {
+    if (validateForm(step)) {
+      setStep(step + 1);
+      setErrors({});
+    } else {
+      toast({
+        title: "Validation Error",
+        description: "Please fix the errors in the form.",
+        variant: "destructive"
+      });
+    }
+  }, [step, validateForm, toast]);
+
+  const handlePreviousStep = useCallback(() => {
+    setStep(step - 1);
+    setErrors({});
+  }, [step]);
+
+  const handleSubmit = useCallback(async () => {
+    if (!validateForm(3)) {
+      toast({
+        title: "Validation Error",
+        description: "Please fix the errors in the form.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsProcessing(true);
     
-    // Mock submission
-    setTimeout(() => {
-      setIsProcessing(false);
+    try {
+      // Mock submission - replace with real API call
+      await new Promise((resolve, reject) => {
+        setTimeout(() => {
+          // Simulate API call
+          if (formData.title && formData.images.length > 0) {
+            resolve({ success: true });
+          } else {
+            reject(new Error('Missing required fields'));
+          }
+        }, 2000);
+      });
+
       toast({
         title: "Item listed successfully!",
         description: `${formData.title} has been added to the marketplace.`,
       });
       navigate('/dashboard');
-    }, 2000);
-  };
+    } catch (error) {
+      toast({
+        title: "Submission failed",
+        description: error.message || "Failed to list item. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [formData, validateForm, toast, navigate]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -263,6 +483,14 @@ const AddItem = () => {
                   max="5"
                 />
 
+                {/* Error Display */}
+                {errors.images && (
+                  <div className="flex items-center mt-2 text-red-600 text-sm">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    {errors.images}
+                  </div>
+                )}
+
                 {/* Image Preview Grid */}
                 {formData.images.length > 0 && (
                   <div className="mt-8">
@@ -285,6 +513,7 @@ const AddItem = () => {
                           <button
                             onClick={() => removeImage(index)}
                             className="absolute top-2 right-2 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                            aria-label={`Remove image ${index + 1}`}
                           >
                             <X className="w-4 h-4" />
                           </button>
@@ -366,7 +595,7 @@ const AddItem = () => {
 
                 <div className="flex justify-end mt-8">
                   <Button
-                    onClick={() => setStep(2)}
+                    onClick={handleNextStep}
                     disabled={formData.images.length === 0}
                     className="px-8 py-3 bg-green-600 hover:bg-green-700"
                   >
@@ -405,8 +634,15 @@ const AddItem = () => {
                       value={formData.title}
                       onChange={(e) => handleInputChange('title', e.target.value)}
                       placeholder="e.g., Vintage Levi's Denim Jacket"
-                      className="rounded-lg"
+                      className={`rounded-lg ${errors.title ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
+                      aria-describedby={errors.title ? "title-error" : undefined}
                     />
+                    {errors.title && (
+                      <div id="title-error" className="flex items-center mt-1 text-red-600 text-sm">
+                        <AlertCircle className="w-4 h-4 mr-1" />
+                        {errors.title}
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -414,7 +650,7 @@ const AddItem = () => {
                       Category *
                     </Label>
                     <Select value={formData.category} onValueChange={(value) => handleInputChange('category', value)}>
-                      <SelectTrigger className="rounded-lg">
+                      <SelectTrigger className={`rounded-lg ${errors.category ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}>
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
@@ -425,6 +661,12 @@ const AddItem = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                    {errors.category && (
+                      <div className="flex items-center mt-1 text-red-600 text-sm">
+                        <AlertCircle className="w-4 h-4 mr-1" />
+                        {errors.category}
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -445,7 +687,7 @@ const AddItem = () => {
                       Size *
                     </Label>
                     <Select value={formData.size} onValueChange={(value) => handleInputChange('size', value)}>
-                      <SelectTrigger className="rounded-lg">
+                      <SelectTrigger className={`rounded-lg ${errors.size ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}>
                         <SelectValue placeholder="Select size" />
                       </SelectTrigger>
                       <SelectContent>
@@ -456,6 +698,12 @@ const AddItem = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                    {errors.size && (
+                      <div className="flex items-center mt-1 text-red-600 text-sm">
+                        <AlertCircle className="w-4 h-4 mr-1" />
+                        {errors.size}
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -463,7 +711,7 @@ const AddItem = () => {
                       Condition *
                     </Label>
                     <Select value={formData.condition} onValueChange={(value) => handleInputChange('condition', value)}>
-                      <SelectTrigger className="rounded-lg">
+                      <SelectTrigger className={`rounded-lg ${errors.condition ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}>
                         <SelectValue placeholder="Select condition" />
                       </SelectTrigger>
                       <SelectContent>
@@ -474,20 +722,12 @@ const AddItem = () => {
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="wearCoins" className="text-sm font-medium text-gray-700 mb-2 block">
-                      Wear Coins Price
-                    </Label>
-                    <Input
-                      id="wearCoins"
-                      type="number"
-                      value={formData.wearCoins}
-                      onChange={(e) => handleInputChange('wearCoins', parseInt(e.target.value))}
-                      placeholder="25"
-                      className="rounded-lg"
-                    />
+                    {errors.condition && (
+                      <div className="flex items-center mt-1 text-red-600 text-sm">
+                        <AlertCircle className="w-4 h-4 mr-1" />
+                        {errors.condition}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -501,25 +741,39 @@ const AddItem = () => {
                     value={formData.description}
                     onChange={(e) => handleInputChange('description', e.target.value)}
                     placeholder="Describe your item in detail..."
-                    rows={4}
-                    className="rounded-lg"
+                    className={`rounded-lg min-h-[120px] ${errors.description ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
+                    aria-describedby={errors.description ? "description-error" : undefined}
                   />
+                  {errors.description && (
+                    <div id="description-error" className="flex items-center mt-1 text-red-600 text-sm">
+                      <AlertCircle className="w-4 h-4 mr-1" />
+                      {errors.description}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    {formData.description.length}/500 characters
+                  </p>
                 </div>
 
                 {/* Tags */}
                 <div>
                   <Label className="text-sm font-medium text-gray-700 mb-2 block">
-                    Tags
+                    Tags (optional)
                   </Label>
-                  <div className="flex items-center space-x-2 mb-4">
+                  <div className="flex space-x-2 mb-3">
                     <Input
                       value={newTag}
                       onChange={(e) => setNewTag(e.target.value)}
                       placeholder="Add a tag..."
                       className="flex-1 rounded-lg"
-                      onKeyPress={(e) => e.key === 'Enter' && addTag()}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addTag();
+                        }
+                      }}
                     />
-                    <Button onClick={addTag} size="sm" className="rounded-lg">
+                    <Button onClick={addTag} size="sm" className="px-4">
                       <Plus className="w-4 h-4" />
                     </Button>
                   </div>
@@ -527,11 +781,12 @@ const AddItem = () => {
                   {formData.tags.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {formData.tags.map((tag, index) => (
-                        <Badge key={index} variant="secondary" className="px-3 py-1">
-                          {tag}
+                        <Badge key={index} variant="secondary" className="flex items-center space-x-1">
+                          <span>{tag}</span>
                           <button
                             onClick={() => removeTag(tag)}
-                            className="ml-2 hover:text-red-600"
+                            className="ml-1 hover:text-red-600"
+                            aria-label={`Remove tag ${tag}`}
                           >
                             <X className="w-3 h-3" />
                           </button>
@@ -539,22 +794,24 @@ const AddItem = () => {
                       ))}
                     </div>
                   )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    {formData.tags.length}/10 tags
+                  </p>
                 </div>
 
-                <div className="flex justify-between">
+                <div className="flex justify-between mt-8">
                   <Button
-                    onClick={() => setStep(1)}
+                    onClick={handlePreviousStep}
                     variant="outline"
                     className="px-8 py-3"
                   >
-                    Back to Photos
+                    Back
                   </Button>
                   <Button
-                    onClick={() => setStep(3)}
-                    disabled={!formData.title || !formData.category || !formData.size || !formData.condition || !formData.description}
+                    onClick={handleNextStep}
                     className="px-8 py-3 bg-green-600 hover:bg-green-700"
                   >
-                    Review Item
+                    Review & Publish
                   </Button>
                 </div>
               </CardContent>
@@ -573,62 +830,68 @@ const AddItem = () => {
             <Card className="border-0 shadow-xl">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
-                  <Eye className="w-6 h-6 text-green-600" />
+                  <CheckCircle className="w-6 h-6 text-green-600" />
                   <span>Review & Publish</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {/* Preview */}
-                <div className="bg-gray-50 rounded-2xl p-6 mb-6">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Item Preview</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <div className="aspect-square bg-white rounded-xl overflow-hidden shadow-md">
-                        {formData.images[0] ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Item Preview */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Item Preview</h3>
+                    <div className="bg-white border rounded-lg p-4">
+                      <div className="aspect-square bg-gray-100 rounded-lg mb-4 overflow-hidden">
+                        {formData.images[0] && (
                           <img
                             src={formData.images[0]}
-                            alt="Item preview"
+                            alt={formData.title}
                             className="w-full h-full object-cover"
                           />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-400">
-                            No Image
-                          </div>
                         )}
                       </div>
+                      <h4 className="font-semibold text-lg text-gray-900 mb-2">{formData.title}</h4>
+                      <p className="text-gray-600 text-sm mb-3">{formData.description}</p>
+                      <div className="flex items-center justify-between text-sm text-gray-500">
+                        <span>{formData.category} • Size {formData.size}</span>
+                        <span className="font-medium text-green-600">{formData.wearCoins} Wear Coins</span>
+                      </div>
                     </div>
-                    
+                  </div>
+
+                  {/* Item Details */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Item Details</h3>
                     <div className="space-y-4">
-                      <div>
-                        <h3 className="text-2xl font-bold text-gray-900">{formData.title}</h3>
-                        <p className="text-gray-600 mt-2">{formData.description}</p>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Title:</span>
+                        <span className="font-medium">{formData.title}</span>
                       </div>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm text-gray-500">Category</p>
-                          <p className="font-medium">{formData.category}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Size</p>
-                          <p className="font-medium">{formData.size}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Condition</p>
-                          <p className="font-medium">{formData.condition}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Wear Coins</p>
-                          <p className="font-medium text-green-600">{formData.wearCoins}</p>
-                        </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Category:</span>
+                        <span className="font-medium">{formData.category}</span>
                       </div>
-                      
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Type:</span>
+                        <span className="font-medium">{formData.type || 'Not specified'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Size:</span>
+                        <span className="font-medium">{formData.size}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Condition:</span>
+                        <span className="font-medium">{formData.condition}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Wear Coins:</span>
+                        <span className="font-medium text-green-600">{formData.wearCoins}</span>
+                      </div>
                       {formData.tags.length > 0 && (
                         <div>
-                          <p className="text-sm text-gray-500 mb-2">Tags</p>
-                          <div className="flex flex-wrap gap-2">
+                          <span className="text-gray-600">Tags:</span>
+                          <div className="flex flex-wrap gap-1 mt-1">
                             {formData.tags.map((tag, index) => (
-                              <Badge key={index} variant="outline">
+                              <Badge key={index} variant="outline" className="text-xs">
                                 {tag}
                               </Badge>
                             ))}
@@ -639,38 +902,13 @@ const AddItem = () => {
                   </div>
                 </div>
 
-                {/* Publishing Options */}
-                <div className="bg-green-50 rounded-2xl p-6 mb-6">
-                  <div className="flex items-center space-x-3 mb-4">
-                    <CheckCircle className="w-6 h-6 text-green-600" />
-                    <h4 className="text-lg font-semibold text-gray-900">Ready to Publish</h4>
-                  </div>
-                  <p className="text-gray-600 mb-4">
-                    Your item will be visible to the ReWear community immediately after publishing.
-                  </p>
-                  <div className="flex items-center space-x-4 text-sm text-gray-600">
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      <span>Photos uploaded</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      <span>Details completed</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      <span>Ready for community</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-between">
+                <div className="flex justify-between mt-8">
                   <Button
-                    onClick={() => setStep(2)}
+                    onClick={handlePreviousStep}
                     variant="outline"
                     className="px-8 py-3"
                   >
-                    Back to Details
+                    Back
                   </Button>
                   <Button
                     onClick={handleSubmit}
@@ -678,9 +916,9 @@ const AddItem = () => {
                     className="px-8 py-3 bg-green-600 hover:bg-green-700"
                   >
                     {isProcessing ? (
-                      <div className="flex items-center space-x-2">
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Publishing...</span>
+                      <div className="flex items-center">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                        Publishing...
                       </div>
                     ) : (
                       'Publish Item'
